@@ -8,9 +8,9 @@ enum Var {
 impl Var {
     fn to_string(&self) -> String {
         match &self {
-            Var::X => "x".to_string(),
-            Var::Y => "y".to_string(),
-            Var::Z => "z".to_string(),
+            Var::X => "X".to_string(),
+            Var::Y => "Y".to_string(),
+            Var::Z => "Z".to_string(),
         }
     }
 }
@@ -74,7 +74,7 @@ impl E {
         match &self {
             E::Add(e1, e2) => format!("({} + {})", e1.to_string(), e2.to_string()),
             E::Neg(e) => format!("-({})", e.to_string()),
-            E::Mul(e1, e2) => format!("{} * {}", e1.to_string(), e2.to_string()),
+            E::Mul(e1, e2) => format!("({} * {})", e1.to_string(), e2.to_string()),
             E::Inv(e) => format!("1/({})", e.to_string()),
             E::Const(c) => c.to_string(),
             E::Var(v) => v.to_string(),
@@ -115,8 +115,12 @@ impl E {
                     Self::constant(Const::Numeric(0))
                 }
             }
-            Self::Func { name, arg } => Self::func(
-                format!("{}_{}",name.to_string(), by.to_string()), arg.diff(by)),
+            Self::Func { name, arg } => {
+                let f_diff = Self::func(
+                    format!("{}_{}", name.to_string(), by.to_string()), arg.clone());
+                let arg_diff = arg.diff(by);
+                Self::mul(f_diff, arg_diff)
+            },
         }
     }
 
@@ -140,6 +144,13 @@ impl E {
         None
     }
 
+    fn unneg(mut self: Box<Self>) -> Box<Self> {
+        while let Some(next) = self.clone().unpack_neg_neg() {
+            self = next;
+        }
+        self
+    }
+
     fn substitute(self, name: &str, value: Box<Self>) -> Box<Self> {
         match self {
             Self::Add(e1, e2) => Self::add(e1.substitute(name, value.clone()),
@@ -150,9 +161,8 @@ impl E {
             Self::Inv(e) => Self::inv(e.substitute(name, value)),
             Self::Var(v) => Self::var(v),
             Self::Func { name:n, arg } => Self::func(n, arg.substitute(name, value)),
-            Self::Const(c) => {
-                
-            },
+            Self::Const(Const::Named(n)) if n == name => value,
+            Self::Const(c) => Self::constant(c),
         }
     }
 }
