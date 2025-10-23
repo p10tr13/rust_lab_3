@@ -1,3 +1,5 @@
+use std::fmt;
+
 #[derive(Copy, Debug, PartialEq, Clone)]
 enum Var {
     X,
@@ -5,29 +7,10 @@ enum Var {
     Z,
 }
 
-impl Var {
-    fn to_string(&self) -> String {
-        match &self {
-            Var::X => "X".to_string(),
-            Var::Y => "Y".to_string(),
-            Var::Z => "Z".to_string(),
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 enum Const {
     Numeric(i64),
     Named(String),
-}
-
-impl Const {
-    fn to_string(&self) -> String {
-        match &self {
-            Const::Numeric(n) => n.to_string(),
-            Const::Named(n) => n.clone(),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -70,18 +53,6 @@ impl E {
         Box::new(Self::Func { name, arg })
     }
 
-    fn to_string(&self) -> String {
-        match &self {
-            E::Add(e1, e2) => format!("({} + {})", e1.to_string(), e2.to_string()),
-            E::Neg(e) => format!("-({})", e.to_string()),
-            E::Mul(e1, e2) => format!("({} * {})", e1.to_string(), e2.to_string()),
-            E::Inv(e) => format!("1/({})", e.to_string()),
-            E::Const(c) => c.to_string(),
-            E::Var(v) => v.to_string(),
-            E::Func { name, arg} => format!("{}({})", name, arg.to_string()),
-        }
-    }
-
     fn arg_count(&self) -> u32 {
         match &self {
             E::Add(_, _) | E::Mul(_, _) => 2,
@@ -92,12 +63,12 @@ impl E {
 
     fn diff(self, by: Var) -> Box<Self> {
         match self {
-            Self::Add(e1, e2) => Self::add(e1.diff(by.clone()), e2.diff(by)),
+            Self::Add(e1, e2) => Self::add(e1.diff(by), e2.diff(by)),
             Self::Neg(e) => Self::neg(e.diff(by)),
             Self::Mul(e1, e2) => {
                 let f = e1.clone();
                 let g = e2.clone();
-                let f_prime = e1.diff(by.clone());
+                let f_prime = e1.diff(by);
                 let g_prime = e2.diff(by);
                 Self::add(Self::mul(f_prime, g), Self::mul(f, g_prime))
             }
@@ -117,7 +88,7 @@ impl E {
             }
             Self::Func { name, arg } => {
                 let f_diff = Self::func(
-                    format!("{}_{}", name.to_string(), by.to_string()), arg.clone());
+                    format!("{}_{}", name, by), arg.clone());
                 let arg_diff = arg.diff(by);
                 Self::mul(f_diff, arg_diff)
             },
@@ -167,7 +138,77 @@ impl E {
     }
 }
 
-fn main() {}
+impl fmt::Display for Var {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Var::X => write!(f, "X"),
+            Var::Y => write!(f, "Y"),
+            Var::Z => write!(f, "Z"),
+        }
+    }
+}
+
+impl fmt::Display for Const {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Const::Numeric(n) => write!(f, "{}", n),
+            Const::Named(n) => write!(f, "{}", n),
+        }
+    }
+}
+
+impl fmt::Display for E {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            E::Add(e1, e2) => write!(f, "({} + {})", e1, e2),
+            E::Neg(e) => write!(f, "-({})", e),
+            E::Mul(e1, e2) => write!(f, "({} * {})", e1, e2),
+            E::Inv(e) => write!(f, "1/({})", e),
+            E::Const(c) => write!(f, "{}", c),
+            E::Var(v) => write!(f, "{}", v),
+            E::Func { name, arg } => write!(f, "{}({})", name, arg),
+        }
+    }
+}
+
+fn main() {
+    // Creating expression
+    let x = E::var(Var::X);
+    let y = E::var(Var::Y);
+    let a = E::constant(Const::Named(String::from("a")));
+
+    // -(-sin(a * X))
+    let ax = E::mul(a.clone(), x.clone());
+    let sin_ax = E::func(String::from("sin"), ax);
+    let neg_neg_sin = E::neg(E::neg(sin_ax));
+
+    // 1/(1/Y)
+    let inv_inv_y = E::inv(E::inv(y));
+    println!("Expression components: {:?}, {:?}",neg_neg_sin ,inv_inv_y);
+
+    // Simplifying components
+    let simple_y = inv_inv_y.uninv();
+    let simple_x = neg_neg_sin.unneg();
+    println!("Simplified expression components: {:?}, {:?}", simple_x, simple_y);
+
+    // f(X,Y) = sin(a * X) + Y
+    let f = E::add(simple_x, simple_y);
+    println!("Created expression: {}", f);
+    println!("Number of arguments: {}", f.arg_count());
+
+    // Derivative
+    let df_dx = f.clone().diff(Var::X);
+    println!("Derivative expression of X: {}", df_dx);
+
+    // Substituting value
+    let a_value = E::constant(Const::Numeric(3));
+    let df_dx_substituted = df_dx.substitute("a", a_value);
+    println!("Derivative with substitution: {}", df_dx_substituted);
+
+    // Sample usage of previously not used functions
+    let g = E::add(E::var(Var::Z), E::constant(Const::Numeric(100)));
+    println!("Expression g = {}", g);
+}
 
 #[cfg(test)]
 mod tests {
@@ -386,3 +427,17 @@ mod tests {
         assert_eq!(E::mul(E::var(Var::X), E::var(Var::Z)).arg_count(), 2);
     }
 }
+
+
+/* Questions
+1. What are Const(Const) and Var(Var)?
+    It's a Rust pattern where the variant name is the same name as the data type it holds. First
+Const represents the name of the variant of enum E. The second is the data type that this variant
+stores. Situation with Var it's exactly the same.
+2. Can we replace Box<E> with E? If not, then why not?
+    We cannot replace Box<E> with E. It's because of how Rust handles memory. If we replaced it
+there would be a problem of potential "infinite" size of E structure. Compiler can't know size_of(E)
+because in case of having Add(E,E) or Mul(E,E) it would have to calculate size(E) = size(E) +
+size(E) + ... making it infinite. That's why we use intelligent pointer making size fixed and known.
+It points to next E that's on the heap.
+*/
