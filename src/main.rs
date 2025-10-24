@@ -184,12 +184,12 @@ fn main() {
 
     // 1/(1/Y)
     let inv_inv_y = E::inv(E::inv(y));
-    println!("Expression components: {:?}, {:?}",neg_neg_sin ,inv_inv_y);
+    println!("Expression components: {}, {}",neg_neg_sin ,inv_inv_y);
 
     // Simplifying components
     let simple_y = inv_inv_y.uninv();
     let simple_x = neg_neg_sin.unneg();
-    println!("Simplified expression components: {:?}, {:?}", simple_x, simple_y);
+    println!("Simplified expression components: {}, {}", simple_x, simple_y);
 
     // f(X,Y) = sin(a * X) + Y
     let f = E::add(simple_x, simple_y);
